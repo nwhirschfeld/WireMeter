@@ -1,0 +1,12 @@
+#!/sbin/openrc-run
+
+supervisor=supervise-daemon
+name=$RC_SVCNAME
+command="/opt/wiremeter.bin"
+command_args="-r eth1 -s eth2 --sleep 2"
+pidfile="/run/$RC_SVCNAME.pid"
+command_background=true
+
+depend() {
+	need net
+}
