@@ -43,8 +43,8 @@ func main() {
 	engine := html.NewFileSystem(http.FS(viewsFS), ".html")
 	app := fiber.New(fiber.Config{
 		Views:        engine,
-		ServerHeader: "ctfEngine",
-		AppName:      "ctfEngine",
+		ServerHeader: "WireMeter",
+		AppName:      "WireMeter",
 		ErrorHandler: func(c *fiber.Ctx, err error) error {
 			// TODO: add logging here
 			fmt.Println(err)
