@@ -5,7 +5,6 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/stretchr/testify/assert"
-	"net"
 	"testing"
 	"time"
 )
@@ -30,10 +29,10 @@ func TestPacketStore_RemovePacket(t *testing.T) {
 	size := 5
 	store := NewMessageStore(size)
 
-	packet1 := createTestPacket("00:11:22:33:44:55")
-	packet2 := createTestPacket("00:11:22:33:44:55")
+	packet1 := createTestPacket(1337)
+	packet2 := createTestPacket(1337)
 
-	store.addPacket(packet1)
+	store.addPacket(1337, packet1.Metadata().Timestamp)
 
 	meas, err := store.removePacket(packet2)
 
@@ -46,35 +45,27 @@ func TestPacketStore_AddPacket(t *testing.T) {
 	size := 5
 	store := NewMessageStore(size)
 
-	packet1 := createTestPacket("00:11:22:33:44:55")
-	packet2 := createTestPacket("11:22:33:44:55:66")
+	packet1 := createTestPacket(1337)
+	packet2 := createTestPacket(1337)
 
-	meas, err := store.addPacket(packet1)
+	meas, err := store.addPacket(1337, packet1.Metadata().Timestamp)
 	assert.Nil(t, err)
 	assert.Nil(t, meas)
 
-	meas, err = store.addPacket(packet2)
+	meas, err = store.addPacket(1337, packet2.Metadata().Timestamp)
 	assert.Nil(t, err)
 	assert.Nil(t, meas)
 
 	// Add more test cases as needed
 }
 
-func createTestPacket(srcMACString string) gopacket.Packet {
-	srcMAC, _ := net.ParseMAC(srcMACString)
-	srcIP := net.ParseIP("192.168.1.1")
-	targetIP := net.ParseIP("192.168.1.2")
-	packetData, _ := generateArpRequestPacket(srcMAC, srcIP, targetIP)
+func createTestPacket(counter uint64) gopacket.Packet {
+	packetData, _ := generateRawEthRequestPacket(counter)
 	return gopacket.NewPacket(packetData.Bytes(), layers.LayerTypeEthernet, gopacket.Default)
 }
 
-func createTestPacketWithTimestamp(srcMAC string, timestamp time.Time) gopacket.Packet {
-	packet := createTestPacket(srcMAC)
+func createTestPacketWithTimestamp(counter uint64, timestamp time.Time) gopacket.Packet {
+	packet := createTestPacket(counter)
 	packet.Metadata().Timestamp = timestamp
 	return packet
-}
-
-func parseMAC(mac string) net.HardwareAddr {
-	parsedMAC, _ := net.ParseMAC(mac)
-	return parsedMAC
 }

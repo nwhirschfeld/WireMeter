@@ -2,9 +2,9 @@ package main
 
 import (
 	"container/ring"
+	"encoding/binary"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
-	"net"
 	"sync"
 	"time"
 )
@@ -16,7 +16,7 @@ type PacketStore struct {
 }
 
 type PacketStoreElement struct {
-	srcMac        net.HardwareAddr
+	counter       uint64
 	sendTimestamp time.Time
 }
 
@@ -27,13 +27,20 @@ func NewMessageStore(size int) *PacketStore {
 	}
 }
 
-func hasPacketSrcMac(mac net.HardwareAddr, packet2 gopacket.Packet) bool {
+func isMagicPacket(index uint64, packet2 gopacket.Packet) bool {
 	ethLayer2 := packet2.Layer(layers.LayerTypeEthernet)
 	if ethLayer2 == nil {
 		return false
 	}
 	ethPacket2, _ := ethLayer2.(*layers.Ethernet)
-	return mac.String() == ethPacket2.SrcMAC.String()
+	if ethPacket2.EthernetType != layers.EthernetType(0x1337) {
+		return false
+	}
+	if len(ethPacket2.Payload) < binary.MaxVarintLen64 {
+		return false
+	}
+	dataIndex := uint64(binary.LittleEndian.Uint64(ethPacket2.Payload))
+	return index == dataIndex
 }
 
 func (mS *PacketStore) removePacket(p gopacket.Packet) (*measurement, error) {
@@ -43,7 +50,7 @@ func (mS *PacketStore) removePacket(p gopacket.Packet) (*measurement, error) {
 	for i := 0; i < mS.size; i++ {
 		if mS.Buffer.Value != nil {
 			e := mS.Buffer.Value.(PacketStoreElement)
-			if hasPacketSrcMac(e.srcMac, p) {
+			if isMagicPacket(e.counter, p) {
 				meas := measurement{timestamp: e.sendTimestamp, reason: ReasonResolvedPacket, duration: p.Metadata().Timestamp.Sub(e.sendTimestamp)}
 				mS.Buffer.Value = nil
 				return &meas, nil
@@ -54,10 +61,10 @@ func (mS *PacketStore) removePacket(p gopacket.Packet) (*measurement, error) {
 	return &measurement{timestamp: p.Metadata().Timestamp, reason: ReasonUnknownPacket}, nil
 }
 
-func (mS *PacketStore) addPacket(p gopacket.Packet) (*measurement, error) {
+func (mS *PacketStore) addPacket(counter uint64, ts time.Time) (*measurement, error) {
 	element := PacketStoreElement{
-		srcMac:        p.Layer(layers.LayerTypeEthernet).(*layers.Ethernet).SrcMAC,
-		sendTimestamp: p.Metadata().Timestamp,
+		counter:       counter,
+		sendTimestamp: ts,
 	}
 	mS.mu.Lock()
 	defer mS.mu.Unlock()

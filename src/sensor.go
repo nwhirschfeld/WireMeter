@@ -48,17 +48,18 @@ func (ws *WireSensor) PacketSource() {
 	ticker := time.NewTicker(time.Duration(ws.waitTime) * time.Millisecond)
 
 	go func() {
-		i := 0
+		i := uint64(0)
 		for {
 			<-ticker.C // Wait for the ticker to tick
 			p := getPacketN(i)
-			p.Metadata().Timestamp = time.Now()
+			ts := time.Now()
+			p.Metadata().Timestamp = ts
 			err = sendingPcapHandle.WritePacketData(p.Data())
 			if err != nil {
 				log.Fatal(err)
 			}
 
-			rp, err := ws.store.addPacket(p)
+			rp, err := ws.store.addPacket(i, ts)
 			if err != nil {
 				return
 			}

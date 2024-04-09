@@ -1,62 +1,36 @@
 package main
 
 import (
-	"fmt"
+	"encoding/binary"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"log"
 	"net"
 )
 
-func getPacketN(i int) gopacket.Packet {
-	srcMAC, _ := net.ParseMAC(intToMACAddress(int64(i)))
-	srcIP := net.ParseIP("192.168.1.1")
-	targetIP := net.ParseIP("192.168.1.2")
-	packetData, err := generateArpRequestPacket(srcMAC, srcIP, targetIP)
+func getPacketN(i uint64) gopacket.Packet {
+	packetData, err := generateRawEthRequestPacket(i)
 	if err != nil {
 		log.Fatal(err)
 	}
 	return gopacket.NewPacket(packetData.Bytes(), layers.LayerTypeEthernet, gopacket.Default)
 }
 
-func intToMACAddress(num int64) string {
-	// Convert the integer to a MAC address format
-	macAddress := fmt.Sprintf("%02x:%02x:%02x:%02x:%02x:%02x",
-		(num>>40)&0xFF,
-		(num>>32)&0xFF,
-		(num>>24)&0xFF,
-		(num>>16)&0xFF,
-		(num>>8)&0xFF,
-		num&0xFF,
-	)
-
-	return macAddress
-}
-
-func generateArpRequestPacket(srcMAC net.HardwareAddr, srcIP, targetIP net.IP) (gopacket.SerializeBuffer, error) {
-	// Create the ARP request packet
-	arpRequest := layers.ARP{
-		AddrType:          layers.LinkTypeEthernet,
-		Protocol:          layers.EthernetTypeIPv4,
-		HwAddressSize:     6,
-		ProtAddressSize:   4,
-		Operation:         layers.ARPRequest,
-		SourceHwAddress:   srcMAC,
-		SourceProtAddress: srcIP,
-		DstHwAddress:      net.HardwareAddr{0xff, 0xff, 0xff, 0xff, 0xff, 0xff}, // Will be populated by the target's MAC address during transmission
-		DstProtAddress:    targetIP,
-	}
-
+func generateRawEthRequestPacket(counter uint64) (gopacket.SerializeBuffer, error) {
 	ethernetLayer := layers.Ethernet{
-		SrcMAC:       srcMAC,
+		SrcMAC:       net.HardwareAddr{0x42, 0x23, 0x69, 0x42, 0x23, 0x69},
 		DstMAC:       net.HardwareAddr{0xff, 0xff, 0xff, 0xff, 0xff, 0xff}, // Broadcast MAC address
-		EthernetType: layers.EthernetTypeARP,
+		EthernetType: layers.EthernetType(0x1337),
 	}
+
+	b := make([]byte, binary.MaxVarintLen64)
+	binary.LittleEndian.PutUint64(b, uint64(counter))
+	rawData := gopacket.Payload(b)
 
 	// Serialize the packet
 	buf := gopacket.NewSerializeBuffer()
-	opts := gopacket.SerializeOptions{FixLengths: true, ComputeChecksums: true}
-	err := gopacket.SerializeLayers(buf, opts, &ethernetLayer, &arpRequest)
+	opts := gopacket.SerializeOptions{ComputeChecksums: true}
+	err := gopacket.SerializeLayers(buf, opts, &ethernetLayer, rawData)
 	if err != nil {
 		return nil, err
 	}
